@@ -3,20 +3,18 @@ from datetime import date, datetime, timedelta
 import json
 import os
 import time
+import requests
 import streamlit as st
 
-# 页面配置
 st.set_page_config(
     page_title="🌟 がんばりスタンプカード 🌟", page_icon="🧸", layout="centered"
 )
 
-# 注入 CSS 样式：包含缩小版的标题栏与连续打卡特殊按钮样式
+# 注入 CSS 样式
 st.markdown(
     """
     <style>
     .stApp { background-color: #FFF0F5; }
-    
-    /* 🌟 缩小版顶部标题卡片（约原先的 2/3 大小） */
     .score-card {
         background: linear-gradient(135deg, #FFB6C1 0%, #FF69B4 100%);
         padding: 12px 18px;
@@ -26,89 +24,33 @@ st.markdown(
         box-shadow: 0px 4px 10px rgba(255, 105, 180, 0.2);
         margin-bottom: 15px;
     }
-    .score-card h2 {
-        color: white !important;
-        margin: 0 !important;
-        font-size: 1.4em !important;
-    }
-    .score-card p {
-        margin: 3px 0 0 0 !important;
-        opacity: 0.95;
-        font-size: 0.85em !important;
-    }
-    
+    .score-card h2 { color: white !important; margin: 0 !important; font-size: 1.4em !important; }
+    .score-card p { margin: 3px 0 0 0 !important; opacity: 0.95; font-size: 0.85em !important; }
     .streak-badge {
-        background-color: #FFF0F5;
-        color: #FF1493;
-        padding: 2px 8px;
-        border-radius: 10px;
-        font-weight: bold;
-        font-size: 0.8em;
-        border: 1px solid #FFB6C1;
+        background-color: #FFF0F5; color: #FF1493; padding: 2px 8px;
+        border-radius: 10px; font-weight: bold; font-size: 0.8em; border: 1px solid #FFB6C1;
     }
     .ticket-card {
-        background-color: #FFFFF0;
-        border: 2px dashed #FF8C00;
-        padding: 10px 14px;
-        border-radius: 14px;
-        margin-bottom: 8px;
+        background-color: #FFFFF0; border: 2px dashed #FF8C00;
+        padding: 10px 14px; border-radius: 14px; margin-bottom: 8px;
         box-shadow: 0px 2px 6px rgba(0,0,0,0.03);
     }
-    
-    /* 迷你日历容器 */
     .mini-calendar-container {
-        max-width: 360px;
-        margin: 0 auto;
-        padding: 10px;
-        background: #FFFFFF;
-        border-radius: 20px;
-        box-shadow: 0px 4px 12px rgba(255, 182, 193, 0.3);
+        max-width: 360px; margin: 0 auto; padding: 10px; background: #FFFFFF;
+        border-radius: 20px; box-shadow: 0px 4px 12px rgba(255, 182, 193, 0.3);
         border: 2px solid #FFE4E1;
     }
-    .cal-header-day {
-        text-align: center;
-        font-weight: bold;
-        color: #FF69B4;
-        font-size: 0.75em;
-        margin-bottom: 6px;
-    }
+    .cal-header-day { text-align: center; font-weight: bold; color: #FF69B4; font-size: 0.75em; margin-bottom: 6px; }
     .cal-day-box {
-        border-radius: 10px;
-        padding: 3px 1px;
-        text-align: center;
-        margin: 1.5px;
-        font-weight: bold;
-        font-size: 0.75em;
-        line-height: 1.1;
-        transition: transform 0.2s;
+        border-radius: 10px; padding: 3px 1px; text-align: center; margin: 1.5px;
+        font-weight: bold; font-size: 0.75em; line-height: 1.1; transition: transform 0.2s;
     }
-    .cal-day-box:hover {
-        transform: scale(1.1);
-    }
-    .cal-full { 
-        background-color: #E8F5E9; 
-        color: #2E7D32; 
-        border: 1.5px solid #A5D6A7; 
-        box-shadow: 0px 2px 4px rgba(76, 175, 80, 0.15);
-    }
-    .cal-part { 
-        background-color: #FFF3E0; 
-        color: #EF6C00; 
-        border: 1.5px solid #FFCC80; 
-        box-shadow: 0px 2px 4px rgba(255, 152, 0, 0.15);
-    }
-    .cal-empty { 
-        background-color: #FAFAFA; 
-        color: #D3D3D3; 
-        border: 1px dashed #E0E0E0; 
-    }
+    .cal-day-box:hover { transform: scale(1.1); }
+    .cal-full { background-color: #E8F5E9; color: #2E7D32; border: 1.5px solid #A5D6A7; }
+    .cal-part { background-color: #FFF3E0; color: #EF6C00; border: 1.5px solid #FFCC80; }
+    .cal-empty { background-color: #FAFAFA; color: #D3D3D3; border: 1px dashed #E0E0E0; }
     .cal-none { background-color: transparent; }
-
-    div.stExpander {
-        background-color: #FFFFFF;
-        border-radius: 16px !important;
-        border: 1px solid #FFE4E1 !important;
-    }
+    div.stExpander { background-color: #FFFFFF; border-radius: 16px !important; border: 1px solid #FFE4E1 !important; }
     </style>
 """,
     unsafe_allow_html=True,
@@ -117,11 +59,19 @@ st.markdown(
 DATA_FILE = "tracker_data.json"
 DEFAULT_TITLE = "🐭 らきちゃんの頑張りスタンプカード 🐭"
 
+# 🌟 已将你的 11 项专属打卡任务及 YouTube 时间写入默认初始化数据中
 DEFAULT_TASKS = [
-    {"id": "reading", "name": "📖 読書 20分", "yt_mins": 5},
-    {"id": "math", "name": "✍️ 算数の宿題", "yt_mins": 10},
-    {"id": "english", "name": "🗣️ 英語の練習 15分", "yt_mins": 5},
-    {"id": "desk", "name": "🧹 机の片付け", "yt_mins": 3},
+    {"id": "t1", "name": "🎒 （自分から）帰宅後の片付け", "yt_mins": 3},
+    {"id": "t2", "name": "✍️ （自分から）学校の宿題", "yt_mins": 5},
+    {"id": "t3", "name": "📝 （言われてから）学校の宿題", "yt_mins": 3},
+    {"id": "t4", "name": "🌸 なな先生の宿題", "yt_mins": 5},
+    {"id": "t5", "name": "📖 大国語の宿題", "yt_mins": 5},
+    {"id": "t6", "name": "🗣️ Jprep宿題/アプリ視聴", "yt_mins": 5},
+    {"id": "t7", "name": "🧹 （自分から）学習机の片付け", "yt_mins": 3},
+    {"id": "t8", "name": "📕 国語ドリル", "yt_mins": 3},
+    {"id": "t9", "name": "📐 算数ドリル", "yt_mins": 3},
+    {"id": "t10", "name": "♟️ 将棋の手詰ハンドブック", "yt_mins": 5},
+    {"id": "t11", "name": "🧼 （自分から）家事の手伝い", "yt_mins": 3},
 ]
 
 DEFAULT_SHOP = [
@@ -131,25 +81,67 @@ DEFAULT_SHOP = [
 ]
 
 
+# ☁️ 从 GitHub 仓库读取云端数据
+def sync_from_github():
+    try:
+        token = st.secrets.get("GITHUB_TOKEN")
+        repo = st.secrets.get("GITHUB_REPO")
+        if not token or not repo:
+            return None
+        url = f"https://api.github.com/repos/{repo}/contents/{DATA_FILE}"
+        headers = {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github.v3.raw",
+        }
+        res = requests.get(url, headers=headers, timeout=5)
+        if res.status_code == 200:
+            return res.json()
+    except Exception:
+        pass
+    return None
+
+
+# ☁️ 把更新的数据自动备份到 GitHub 仓库
+def sync_to_github(data):
+    try:
+        token = st.secrets.get("GITHUB_TOKEN")
+        repo = st.secrets.get("GITHUB_REPO")
+        if not token or not repo:
+            return
+        url = f"https://api.github.com/repos/{repo}/contents/{DATA_FILE}"
+        headers = {"Authorization": f"token {token}"}
+
+        res = requests.get(url, headers=headers, timeout=5)
+        sha = res.json().get("sha") if res.status_code == 200 else None
+
+        content_str = json.dumps(data, ensure_ascii=False, indent=4)
+        import base64
+
+        content_b64 = base64.b64encode(content_str.encode("utf-8")).decode(
+            "utf-8"
+        )
+
+        payload = {
+            "message": "Auto update tracker_data.json via App",
+            "content": content_b64,
+        }
+        if sha:
+            payload["sha"] = sha
+
+        requests.put(url, headers=headers, json=payload, timeout=5)
+    except Exception:
+        pass
+
+
 def load_data():
+    cloud_data = sync_from_github()
+    if cloud_data:
+        return cloud_data
+
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if "app_title" not in data:
-                    data["app_title"] = DEFAULT_TITLE
-                if "tasks" not in data:
-                    data["tasks"] = DEFAULT_TASKS
-                if "shop" not in data:
-                    data["shop"] = DEFAULT_SHOP
-                if "youtube_mins" not in data:
-                    data["youtube_mins"] = 0
-                if "wallet" not in data:
-                    data["wallet"] = []
-                for task in data["tasks"]:
-                    if "yt_mins" not in task:
-                        task["yt_mins"] = 5
-                return data
+                return json.load(f)
         except Exception:
             pass
     return {
@@ -167,17 +159,19 @@ def load_data():
 def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
+    sync_to_github(data)
 
 
 if "data" not in st.session_state:
     st.session_state.data = load_data()
 
+if "target_date" not in st.session_state:
+    st.session_state.target_date = date.today()
+
 data = st.session_state.data
 
-# 1. 顶部成就看板（缩小至 2/3，前后带小老鼠 🐭 图标）
+# 1. 顶部成就看板
 current_title = data.get("app_title", DEFAULT_TITLE)
-
-# 如果原标题还带着气球 🎈，自动替换为小老鼠 🐭
 if "🎈" in current_title:
     current_title = current_title.replace("🎈", "🐭")
 
@@ -199,14 +193,30 @@ with col_score2:
 
 st.markdown("---")
 
-# 2. 单日打卡与日期选择
-selected_date = st.date_input("📅 詳細チェックの日付を選択", value=date.today())
-date_str = selected_date.strftime("%Y-%m-%d")
+# 2. 锁定当天的日期选择框与快速回到“今日”按钮
+date_col1, date_col2 = st.columns([3, 1])
+
+with date_col1:
+    selected_date = st.date_input(
+        "📅 詳細チェックの日付を選択",
+        value=st.session_state.target_date,
+        key="picker_date",
+    )
+    st.session_state.target_date = selected_date
+
+with date_col2:
+    st.write(" ")
+    st.write(" ")
+    if st.button("今日にする"):
+        st.session_state.target_date = date.today()
+        st.rerun()
+
+date_str = st.session_state.target_date.strftime("%Y-%m-%d")
 today_records = data["records"].get(date_str, [])
 
 st.subheader(f"📝 {date_str} のチェックイン")
 
-# 3. 任务打卡列表（带 5 天连续打卡特别奖励按钮）
+# 3. 单日打卡
 for task in data["tasks"]:
     t_name = task["name"]
     t_id = task["id"]
@@ -231,9 +241,9 @@ for task in data["tasks"]:
             data["records"][date_str].append(t_name)
             data["flowers"] += 1
 
-            yesterday_str = (selected_date - timedelta(days=1)).strftime(
-                "%Y-%m-%d"
-            )
+            yesterday_str = (
+                st.session_state.target_date - timedelta(days=1)
+            ).strftime("%Y-%m-%d")
             yesterday_records = data["records"].get(yesterday_str, [])
             new_streak = (
                 current_streak + 1
@@ -254,9 +264,9 @@ for task in data["tasks"]:
             data["records"][date_str].append(t_name)
             data["youtube_mins"] += t_yt
 
-            yesterday_str = (selected_date - timedelta(days=1)).strftime(
-                "%Y-%m-%d"
-            )
+            yesterday_str = (
+                st.session_state.target_date - timedelta(days=1)
+            ).strftime("%Y-%m-%d")
             yesterday_records = data["records"].get(yesterday_str, [])
             new_streak = (
                 current_streak + 1
@@ -271,7 +281,6 @@ for task in data["tasks"]:
             )
             st.rerun()
 
-    # 🌟 新功能：连续打卡达到 5 天或以上时，展示领奖按钮
     if current_streak >= 5:
         b_col1, b_col2 = st.columns([2.0, 2.1])
         with b_col2:
@@ -280,7 +289,6 @@ for task in data["tasks"]:
                 key=f"streak_bonus_{t_id}_{date_str}",
             ):
                 data["flowers"] += 2
-                # 领取后重置或扣减 5 天计数，开始下一轮5天挑战
                 data["streaks"][t_id] = current_streak - 5
                 save_data(data)
                 st.balloons()
@@ -291,7 +299,7 @@ for task in data["tasks"]:
 
 st.markdown("---")
 
-# 4. 🌟 已调整位置：电子钱包（マイ財布）放置于 チェックイン 的下面
+# 4. 电子钱包（マイ財布）
 with st.expander("👛 マイ財布（手に入れたチケット）", expanded=True):
     wallet = data.get("wallet", [])
     if not wallet:
@@ -351,10 +359,9 @@ for idx, item in enumerate(data["shop"]):
 
 st.markdown("---")
 
-# 6. 精小全景日历（位置：ご褒美交換所的下方）
+# 6. 精小日历
 with st.expander("🗓️ 今月のカレンダー（全体チェック状況）", expanded=True):
     today = date.today()
-
     c_col1, c_col2, c_col3 = st.columns([1, 2, 1])
     with c_col2:
         y_col, m_col = st.columns(2)
@@ -426,8 +433,10 @@ with st.expander("🗓️ 今月のカレンダー（全体チェック状況）
 
 st.markdown("---")
 
-# 7. ⚙️ 家长管理区
-with st.expander("⚙️ 保護者専用設定（タイトル・タスク・ご褒美・リセット）"):
+# 7. ⚙️ 家长管理区（保持常开）
+with st.expander(
+    "⚙️ 保護者専用設定（タイトル・タスク・ご褒美・リセット）", expanded=True
+):
     tab0, tab1, tab2, tab3, tab4 = st.tabs(
         [
             "🏷️ タイトル設定",
@@ -447,19 +456,18 @@ with st.expander("⚙️ 保護者専用設定（タイトル・タスク・ご�
                 save_data(data)
                 st.success("タイトルを更新しました！")
                 st.rerun()
-            else:
-                st.warning("タイトルを入力してください！")
 
     with tab1:
-        st.write("##### 新しいタスクの追加")
+        st.write("##### ➕ 新しいタスクの追加")
         new_task_name = st.text_input(
-            "タスク名", placeholder="例：🧩 パズル 30分"
+            "タスク名", placeholder="例：🧩 パズル 30分", key="add_t_name"
         )
         new_task_yt = st.number_input(
             "このタスクで得られる YouTube 時間（分）",
             min_value=1,
             value=5,
             step=1,
+            key="add_t_yt",
         )
 
         if st.button("タスクを追加"):
@@ -475,27 +483,54 @@ with st.expander("⚙️ 保護者専用設定（タイトル・タスク・ご�
                 save_data(data)
                 st.success(f"追加しました：{new_task_name}")
                 st.rerun()
-            else:
-                st.warning("タスク名を入力してください！")
 
-        st.write("##### 現在のタスク一覧（個別のYouTube時間設定・削除）")
+        st.markdown("---")
+        st.write("##### ✏️ 現在のタスク一覧（名前・YouTube時間の編集・削除）")
         for idx, t in enumerate(data["tasks"]):
-            del_col1, del_col2 = st.columns([3, 1])
-            del_col1.write(
-                f"**{t['name']}** （獲得YouTube時間: {t.get('yt_mins', 5)}分）"
+            st.markdown(f"**タスク {idx+1}**")
+            edit_c1, edit_c2, edit_c3, edit_c4 = st.columns([3, 1.5, 1, 1])
+
+            mod_name = edit_c1.text_input(
+                "タスク名",
+                value=t["name"],
+                key=f"edit_tname_{idx}",
+                label_visibility="collapsed",
             )
-            if del_col2.button("削除", key=f"del_task_{idx}"):
+            mod_yt = edit_c2.number_input(
+                "YouTube(分)",
+                min_value=1,
+                value=int(t.get("yt_mins", 5)),
+                key=f"edit_tyt_{idx}",
+                label_visibility="collapsed",
+            )
+
+            if edit_c3.button("保存", key=f"save_task_{idx}"):
+                data["tasks"][idx]["name"] = mod_name
+                data["tasks"][idx]["yt_mins"] = int(mod_yt)
+                save_data(data)
+                st.success("更新しました！")
+                st.rerun()
+
+            if edit_c4.button("削除", key=f"del_task_{idx}"):
                 data["tasks"].pop(idx)
                 save_data(data)
                 st.rerun()
+            st.markdown(
+                "<hr style='margin:5px 0; border:0.5px dashed #FFB6C1;'>",
+                unsafe_allow_html=True,
+            )
 
     with tab2:
-        st.write("##### 新しいご褒美の追加")
+        st.write("##### ➕ 新しいご褒美の追加")
         new_item_name = st.text_input(
-            "ご褒美名", placeholder="例：🍿 映画を観に行く"
+            "ご褒美名", placeholder="例：🍿 映画を観に行く", key="add_s_name"
         )
         new_item_cost = st.number_input(
-            "必要なお花の枚数", min_value=1, value=10, step=1
+            "必要なお花の枚数",
+            min_value=1,
+            value=10,
+            step=1,
+            key="add_s_cost",
         )
         if st.button("ご褒美を追加"):
             if new_item_name:
@@ -505,17 +540,44 @@ with st.expander("⚙️ 保護者専用設定（タイトル・タスク・ご�
                 save_data(data)
                 st.success(f"追加しました：{new_item_name}")
                 st.rerun()
-            else:
-                st.warning("ご褒美名を入力してください！")
 
-        st.write("##### 現在のご褒美一覧（削除）")
+        st.markdown("---")
+        st.write(
+            "##### ✏️ 現在のご褒美一覧（名前・必要枚数の編集・削除）"
+        )
         for idx, item in enumerate(data["shop"]):
-            del_col1, del_col2 = st.columns([3, 1])
-            del_col1.write(f"{item['name']}（🌸 {item['cost']}枚）")
-            if del_col2.button("削除", key=f"del_item_{idx}"):
+            st.markdown(f"**ご褒美 {idx+1}**")
+            edit_s1, edit_s2, edit_s3, edit_s4 = st.columns([3, 1.5, 1, 1])
+
+            mod_sname = edit_s1.text_input(
+                "ご褒美名",
+                value=item["name"],
+                key=f"edit_sname_{idx}",
+                label_visibility="collapsed",
+            )
+            mod_scost = edit_s2.number_input(
+                "お花枚数",
+                min_value=1,
+                value=int(item["cost"]),
+                key=f"edit_scost_{idx}",
+                label_visibility="collapsed",
+            )
+
+            if edit_s3.button("保存", key=f"save_item_{idx}"):
+                data["shop"][idx]["name"] = mod_sname
+                data["shop"][idx]["cost"] = int(mod_scost)
+                save_data(data)
+                st.success("更新しました！")
+                st.rerun()
+
+            if edit_s4.button("削除", key=f"del_item_{idx}"):
                 data["shop"].pop(idx)
                 save_data(data)
                 st.rerun()
+            st.markdown(
+                "<hr style='margin:5px 0; border:0.5px dashed #FFB6C1;'>",
+                unsafe_allow_html=True,
+            )
 
     with tab3:
         st.write("##### YouTube 時間の消費・手動調整")
