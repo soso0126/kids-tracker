@@ -1,9 +1,15 @@
 {
     "app_title": "🐭 らきちゃんの頑張りスタンプカード 🐭",
-    "flowers": 0,
+    "flowers": 1,
     "youtube_mins": 0,
-    "records": {},
-    "streaks": {},
+    "records": {
+        "2026-09-13": [
+            "📕 国語ドリル"
+        ]
+    },
+    "streaks": {
+        "t8": 1
+    },
     "tasks": [
         {
             "id": "t1",
