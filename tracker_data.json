@@ -140,6 +140,10 @@
         {
             "name": "好きな本1冊",
             "cost": 30
+        },
+        {
+            "name": "babybus game",
+            "cost": 5
         }
     ],
     "wallet": []
