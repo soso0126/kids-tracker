@@ -235,10 +235,5 @@
             "cost": 5
         }
     ],
-    "wallet": [
-        {
-            "name": "babybus game",
-            "date": "2026-10-27 11:29"
-        }
-    ]
+    "wallet": []
 }
