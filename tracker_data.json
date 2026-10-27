@@ -1,6 +1,6 @@
 {
     "app_title": "🐭 らきちゃんの頑張りスタンプカード 🐭",
-    "flowers": 13,
+    "flowers": 8,
     "youtube_mins": 25,
     "records": {
         "2026-09-13": [
@@ -235,5 +235,10 @@
             "cost": 5
         }
     ],
-    "wallet": []
+    "wallet": [
+        {
+            "name": "babybus game",
+            "date": "2026-10-27 11:29"
+        }
+    ]
 }
